@@ -1,1 +1,4 @@
 langgraph
+langchain-groq
+langchain-core>=1.2.28
+python-dotenv
