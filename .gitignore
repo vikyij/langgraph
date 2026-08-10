@@ -13,3 +13,10 @@ lc-academy-env/
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# SQLite databases and temporary files
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
