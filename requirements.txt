@@ -4,3 +4,6 @@ langchain-core>=1.2.28
 python-dotenv
 langgraph-prebuilt
 langgraph-checkpoint-sqlite
+langchain-tavily
+wikipedia
+langchain_community
