@@ -1,0 +1,84 @@
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from typing import Annotated
+from typing_extensions import TypedDict
+import operator
+from pydantic import BaseModel
+from langgraph.types import Send
+from langgraph.graph import StateGraph, START, END
+
+load_dotenv()
+
+# Prompts we will use
+subjects_prompt = """Generate a list of 3 sub-topics that are all related to this overall topic: {topic}."""
+joke_prompt = """Generate a joke about {subject}"""
+best_joke_prompt = """Below are a bunch of jokes about {topic}. Select the best one! Return the ID of the best one, starting 0 as the ID for the first joke. Jokes: \n\n  {jokes}"""
+
+llm = ChatGroq(model='llama-3.3-70b-versatile', temperature=0)
+
+class Subjects(BaseModel):
+    subjects: list[str]
+
+class BestJoke(BaseModel):
+    id: int
+    
+class OverallState(TypedDict):
+    topic: str
+    subjects: list
+    jokes: Annotated[list, operator.add]
+    best_selected_joke: str
+
+# generate subjects for jokes
+def generate_topics(state: OverallState):
+    prompt = subjects_prompt.format(topic=state["topic"])
+    response = llm.with_structured_output(Subjects).invoke(prompt)
+    return {"subjects": response.subjects}
+
+def continue_to_jokes(state: OverallState):
+    return [Send("generate_joke", {"subject": s}) for s in state["subjects"]]
+
+class JokeState(TypedDict):
+    subject: str
+
+class Joke(BaseModel):
+    joke: str
+
+def generate_joke(state: JokeState):
+    prompt = joke_prompt.format(subject=state["subject"])
+    response = llm.with_structured_output(Joke).invoke(prompt)
+    return {"jokes": [response.joke]}
+
+def best_joke(state: OverallState):
+    jokes = "\n\n".join(state["jokes"])
+    prompt = best_joke_prompt.format(topic=state["topic"], jokes=jokes)
+    response = llm.with_structured_output(BestJoke).invoke(prompt)
+    return {"best_selected_joke": state["jokes"][response.id]}
+
+# Construct the graph: here we put everything together to construct our graph
+builder = StateGraph(OverallState)
+builder.add_node("generate_topics", generate_topics)
+builder.add_node("generate_joke", generate_joke)
+builder.add_node("best_joke", best_joke)
+
+builder.add_edge(START, "generate_topics")
+builder.add_conditional_edges("generate_topics", continue_to_jokes, ["generate_joke"])
+builder.add_edge("generate_joke", "best_joke")
+builder.add_edge("best_joke", END)
+
+# Compile the graph
+graph = builder.compile()
+
+# Generate and save the graph visualization
+graph_image = graph.get_graph().draw_mermaid_png()
+
+with open("map_reduce_graph.png", "wb") as file:
+    file.write(graph_image)
+
+print("Graph saved as map_reduce_graph.png")
+
+# result = graph.invoke({'topic': 'AI'})
+# print(result)
+
+# Call the graph: here we call it to generate a list of jokes
+for s in graph.stream({"topic": "AI"}):
+    print(s)
