@@ -7,3 +7,4 @@ langgraph-checkpoint-sqlite
 langchain-tavily
 wikipedia
 langchain_community
+trustcall
